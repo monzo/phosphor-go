@@ -134,7 +134,9 @@ func (p *Phosphor) monitorConfig() {
 		case <-configChange:
 		case <-configTimer.C:
 		}
-		p.reloadConfig()
+		if err := p.reloadConfig(); err != nil {
+			log.Warnf("[Phosphor] Failed to reload configuration: %v", err)
+		}
 	}
 }
 
