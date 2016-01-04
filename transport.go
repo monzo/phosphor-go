@@ -9,7 +9,7 @@ import (
 
 // transport consumes traces and sends these onto a phosphor server
 type transport interface {
-	Consume(oldChan, newChan chan []byte)
+	Consume(oldChan, newChan chan []byte) error
 	Stop() error
 }
 
@@ -33,7 +33,7 @@ type udpTransport struct {
 func newUDPTransport(endpoint string) transport {
 	return &udpTransport{
 		endpoint: endpoint,
-	}, nil
+	}
 }
 
 // Consume causes the transport to connect, and start consuming traces
@@ -47,6 +47,7 @@ func (u *udpTransport) Consume(oldChan, newChan chan []byte) error {
 	}
 
 	u.t.Go(u.consume)
+	return nil
 }
 
 // Stop our transport, this can only be stopped once, and requires a new

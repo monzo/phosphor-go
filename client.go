@@ -22,10 +22,6 @@ var (
 	ErrTimeout = errors.New("timeout queueing annotation")
 )
 
-var (
-	tracer *traceClient
-)
-
 // Phosphor is a client which sends annotations to the phosphor server. This
 // should be initialised with New() rather than directly
 type Phosphor struct {

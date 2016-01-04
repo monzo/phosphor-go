@@ -29,7 +29,7 @@ type Config struct {
 }
 
 // NewConfig returns a Config with default settings initialized
-func NewConfig() {
+func NewConfig() *Config {
 	return &Config{
 		initialized:   true,
 		Host:          "localhost",
