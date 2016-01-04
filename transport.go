@@ -3,29 +3,36 @@ package phosphor
 import (
 	"net"
 	"time"
+
+	"gopkg.in/tomb.v2"
 )
 
+// transport consumes traces and sends these onto a phosphor server
 type transport interface {
 	Consume(oldChan, newChan chan []byte)
 	Stop() error
 }
 
+// udpTransport is a concrete implementation of the transport interface which
+// sends trace data via UDP
 type udpTransport struct {
 	endpoint string
 
+	// conn is the UDP connection used to send
 	conn net.Conn
 
 	// channels used to receive traces
 	oldChan chan []byte
 	newChan chan []byte
 
-	stopChan chan struct{}
+	// tomb is used to control our worker(s) consuming and sending
+	t tomb.Tomb
 }
 
+// newUDPTransport returns an unconnected UDP transport
 func newUDPTransport(endpoint string) transport {
 	return &udpTransport{
 		endpoint: endpoint,
-		stopChan: make(chan struct{}),
 	}, nil
 }
 
@@ -39,21 +46,14 @@ func (u *udpTransport) Consume(oldChan, newChan chan []byte) error {
 		return err
 	}
 
-	go u.consume()
+	u.t.Go(u.consume)
 }
 
 // Stop our transport, this can only be stopped once, and requires a new
 // transport to be created to resume sending
 func (u *udpTransport) Stop() error {
-	select {
-	case <-u.stopChan:
-	default:
-		close(u.stopChan)
-	}
-
-	// TODO wait for exit
-
-	return nil
+	u.t.Kill(nil)
+	return u.t.Wait()
 }
 
 // connect our transport
@@ -69,12 +69,12 @@ func (u *udpTransport) connect() error {
 }
 
 // consume from our internal trace channels until we exit
-func (u *udpTransport) consume() {
+func (u *udpTransport) consume() error {
 	var b []byte
 	for {
 		select {
-		case <-u.stopChan:
-			return
+		case <-u.t.Dying():
+			return nil
 		case b = <-u.oldChan:
 		case b = <-u.newChan:
 		}
