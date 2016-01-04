@@ -2,6 +2,7 @@ package phosphor
 
 import (
 	"errors"
+	"fmt"
 	"io"
 	"sync"
 	"time"
@@ -26,6 +27,8 @@ var (
 	tracer *traceClient
 )
 
+// Phosphor is a client which sends annotations to the phosphor server. This
+// should be initialised with New() rather than directly
 type Phosphor struct {
 	// ensure the client is initialized
 	initOnce sync.Once
@@ -53,6 +56,8 @@ type Phosphor struct {
 	// exitChan is closed when the client is shutting down
 	// TODO refactor to use tomb
 	exitChan chan struct{}
+
+	dispatcher dispatcher
 }
 
 // New initialises and returns a Phosphor client
@@ -131,19 +136,32 @@ func (p *Phosphor) monitorConfig() {
 	}
 }
 
+func (p *Phosphor) compareConfigHash(h []byte) bool {
+	p.configMtx.RLock()
+	defer p.configMtx.RUnlock()
+	return p.configLastHash == h
+}
+
+func (p *Phosphor) updateConfigHash(h []byte) {
+	p.configMtx.Lock()
+	p.configLastHash = h
+	p.configMtx.Unlock()
+	return
+}
+
 // reloadConfig and reinitialise phosphor client if necessary
 //
 // Get Config
 // Test hash of config to determine if changed
 // If so, update config & reinit
-func (p *Phosphor) reloadConfig() {
+func (p *Phosphor) reloadConfig() error {
 	c := p.configProvider.Config()
 	h := deephash.Hash(c)
-	if !p.configChanged(newHash) {
-		return
-	}
 
-	// TODO actually re init things
+	// Skip reloading if the config is the same
+	if p.compareConfigHash(newHash) {
+		return nil
+	}
 
 	// keep reference to the old channel so we can drain this in parallel with
 	// new traces the dispatcher receives
@@ -156,18 +174,31 @@ func (p *Phosphor) reloadConfig() {
 	}
 	newChan = make(chan []byte, bufLen)
 
-	// init new tracer passing both channels to this
+	// Get a new dispatcher and keep a reference to the old one
+	oldD := p.dispatcher
+	endpoint := fmt.Sprintf("%s:%v", c.Host, c.Port)
+	newD := newUDPDispatcher(endpoint)
+
+	// start new dispatcher by passing both channels to this
 	// therefore it starts consuming from the new one (with nothing)
 	// and also the old one (still current) in parallel to the previous tracer
-
-	// gracefully shut down old tracer, so just the new one is running
+	// If this somehow fails, abort until next attempt
+	if err := newD.Dispatch(oldChan, newChan); err != nil {
+		newD.Stop()
+		return err
+	}
 
 	// swap the client reference of the trace channel from old to new, so
 	// new clients start using the new resized channel
+	// TODO atomic swap
+	p.traceChan = newChan
 
-	// close old channel? in theory on the next config reload this will be
-	// recycled, fall out of scope and garbage collected as it will have no
-	// producers or consumers, so ideally not necessary, and avoids writing to
-	// closed channel problems
+	// gracefully shut down old dispatcher, so just the new one is running
+	if err := oldD.Stop(); err != nil {
+		return err
+	}
 
+	// set the config hash as we're finished
+	p.updateConfigHash(h)
+	return nil
 }
