@@ -3,7 +3,6 @@ package phosphor
 import (
 	"errors"
 	"fmt"
-	"io"
 	"sync"
 	"time"
 
@@ -32,10 +31,6 @@ var (
 type Phosphor struct {
 	// ensure the client is initialized
 	initOnce sync.Once
-
-	// an io.Writer to which the traces are written
-	// this is currently a UDP socket
-	w io.Writer
 
 	// traceChan internally buffers traces and passes these from
 	// producers to the writers
