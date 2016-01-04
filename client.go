@@ -52,8 +52,9 @@ type Phosphor struct {
 	// TODO refactor to use tomb
 	exitChan chan struct{}
 
-	dispatcherMtx sync.Mutex
+	// dispatcher is used to send traces onto phosphor or phosphorD
 	dispatcher    dispatcher
+	dispatcherMtx sync.Mutex
 }
 
 // New initialises and returns a Phosphor client
