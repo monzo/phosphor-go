@@ -52,9 +52,9 @@ type Phosphor struct {
 	// TODO refactor to use tomb
 	exitChan chan struct{}
 
-	// dispatcher is used to send traces onto phosphor or phosphorD
-	dispatcher    dispatcher
-	dispatcherMtx sync.Mutex
+	// the transport is used to send traces onto phosphor or phosphorD
+	tr    transport
+	trMtx sync.Mutex
 }
 
 // New initialises and returns a Phosphor client
@@ -86,7 +86,7 @@ func (p *Phosphor) Send(a *phos.Annotation) error {
 	//
 	// We're marshaling this here so that the marshalling can be executed
 	// concurrently by any number of clients before pushing this to a single
-	// worker goroutine for dispatch
+	// worker goroutine for transport
 	//
 	// TODO future versions of this may use a more feature rich wire format
 	b, err := proto.Marshal(a)
@@ -165,7 +165,7 @@ func (p *Phosphor) reloadConfig() error {
 	}
 
 	// keep reference to the old channel so we can drain this in parallel with
-	// new traces the dispatcher receives
+	// new traces the transport receives
 	oldChan := p.traceChan
 
 	// init new channel for traces, ensure this *isn't* zero
@@ -175,19 +175,19 @@ func (p *Phosphor) reloadConfig() error {
 	}
 	newChan = make(chan []byte, bufLen)
 
-	// Get a new dispatcher and keep a reference to the old one
-	p.dispatcherMtx.Lock()
-	defer p.dispatcherMtx.Unlock()
-	oldD := p.dispatcher
+	// Get a new transport and keep a reference to the old one
+	p.trMtx.Lock()
+	defer p.trMtx.Unlock()
+	oldTr := p.tr
 	endpoint := fmt.Sprintf("%s:%v", c.Host, c.Port)
-	newD := newUDPDispatcher(endpoint)
+	newTr := newUDPTransport(endpoint)
 
-	// start new dispatcher by passing both channels to this
+	// start new transport by passing both channels to this
 	// therefore it starts consuming from the new one (with nothing)
-	// and also the old one (still current) in parallel to the previous tracer
+	// and also the old one (still current) in parallel to the previous transport
 	// If this somehow fails, abort until next attempt
-	if err := newD.Dispatch(oldChan, newChan); err != nil {
-		newD.Stop()
+	if err := newTr.Consume(oldChan, newChan); err != nil {
+		newTr.Stop()
 		return err
 	}
 
@@ -196,14 +196,14 @@ func (p *Phosphor) reloadConfig() error {
 	// TODO atomic swap
 	p.traceChan = newChan
 
-	// gracefully shut down old dispatcher, so just the new one is running
-	if err := oldD.Stop(); err != nil {
+	// gracefully shut down old transport, so just the new one is running
+	if err := oldTr.Stop(); err != nil {
 		return err
 	}
 
-	// set the config hash & swap the dispatcher as we're finished
+	// set the config hash & swap the transport as we're finished
 	p.updateConfigHash(h)
-	p.dispatcher = newD
+	p.tr = newTr
 
 	return nil
 }

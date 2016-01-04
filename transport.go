@@ -5,12 +5,12 @@ import (
 	"time"
 )
 
-type dispatcher interface {
-	Dispatch([]chan []byte)
+type transport interface {
+	Consume(oldChan, newChan chan []byte)
 	Stop() error
 }
 
-type udpDispatcher struct {
+type udpTransport struct {
 	endpoint string
 
 	conn net.Conn
@@ -22,16 +22,16 @@ type udpDispatcher struct {
 	stopChan chan struct{}
 }
 
-func newUDPDispatcher(endpoint string) dispatcher {
-	return &udpDispatcher{
+func newUDPTransport(endpoint string) transport {
+	return &udpTransport{
 		endpoint: endpoint,
 		stopChan: make(chan struct{}),
 	}, nil
 }
 
-// Dispatch causes the dispatcher to connect, and start consuming traces
+// Consume causes the transport to connect, and start consuming traces
 // from the provided channels
-func (u *udpDispatcher) Dispatch(oldChan, newChan chan []byte) error {
+func (u *udpTransport) Consume(oldChan, newChan chan []byte) error {
 	u.oldChan = oldChan
 	u.newChan = newChan
 
@@ -39,25 +39,25 @@ func (u *udpDispatcher) Dispatch(oldChan, newChan chan []byte) error {
 		return err
 	}
 
-	go u.dispatch()
+	go u.consume()
 }
 
-// Stop our dispatcher, this can only be stopped once, and requires a new
-// dispatcher to be created to resume sending
-func (u *udpDispatcher) Stop() error {
+// Stop our transport, this can only be stopped once, and requires a new
+// transport to be created to resume sending
+func (u *udpTransport) Stop() error {
 	select {
 	case <-u.stopChan:
 	default:
 		close(u.stopChan)
 	}
 
-	// wait for exit
+	// TODO wait for exit
 
 	return nil
 }
 
-// connect our dispatcher
-func (u *udpDispatcher) connect() error {
+// connect our transport
+func (u *udpTransport) connect() error {
 	c, err := net.DialTimeout("UDP", u.endpoint, 1*time.Second)
 	if err != nil {
 		return err
@@ -68,7 +68,8 @@ func (u *udpDispatcher) connect() error {
 	return nil
 }
 
-func (u *udpDispatcher) dispatch() {
+// consume from our internal trace channels until we exit
+func (u *udpTransport) consume() {
 	var b []byte
 	for {
 		select {
@@ -82,6 +83,7 @@ func (u *udpDispatcher) dispatch() {
 	}
 }
 
-func (u *udpDispatcher) send(b []byte) {
+// send a []byte via our connection
+func (u *udpTransport) send(b []byte) {
 	u.conn.Write(b)
 }
