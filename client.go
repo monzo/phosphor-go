@@ -173,7 +173,7 @@ func (p *Phosphor) reloadConfig() error {
 	if bufLen == 0 {
 		bufLen = defaultTraceBufferSize
 	}
-	newChan = make(chan []byte, bufLen)
+	newChan := make(chan []byte, bufLen)
 
 	// Get a new transport and keep a reference to the old one
 	p.trMtx.Lock()
@@ -193,7 +193,7 @@ func (p *Phosphor) reloadConfig() error {
 
 	// swap the client reference of the trace channel from old to new, so
 	// new clients start using the new resized channel
-	// TODO atomic swap
+	// TODO atomically swap this
 	p.traceChan = newChan
 
 	// gracefully shut down old transport, so just the new one is running
