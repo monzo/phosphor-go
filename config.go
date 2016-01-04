@@ -2,6 +2,16 @@ package phosphor
 
 import "time"
 
+// ConfigProvider returns configuration used by the client, and can
+// notify a client when this changes
+type ConfigProvider interface {
+	// Notify returns a channel which fires on config changes
+	Notify() <-chan struct{}
+
+	// Config returns the raw configuration
+	Config() *Config
+}
+
 // Config used by our client
 type Config struct {
 	initialized bool
@@ -57,18 +67,10 @@ func (c *Config) Notify() <-chan struct{} {
 func (c *Config) Config() *Config {
 	// Guard against nil pointer dereference
 	if c == nil {
-		return &Config{}
+		return NewConfig()
 	}
 
 	// Return a clone of the config so that this is immutable for the receiver
 	c2 := *c
 	return &c2
-}
-
-type ConfigProvider interface {
-	// Notify returns a channel which fires on config changes
-	Notify() <-chan struct{}
-
-	// Config returns the raw configuration
-	Config() *Config
 }
