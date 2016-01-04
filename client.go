@@ -57,7 +57,8 @@ type Phosphor struct {
 	// TODO refactor to use tomb
 	exitChan chan struct{}
 
-	dispatcher dispatcher
+	dispatcherMtx sync.Mutex
+	dispatcher    dispatcher
 }
 
 // New initialises and returns a Phosphor client
@@ -179,6 +180,8 @@ func (p *Phosphor) reloadConfig() error {
 	newChan = make(chan []byte, bufLen)
 
 	// Get a new dispatcher and keep a reference to the old one
+	p.dispatcherMtx.Lock()
+	defer p.dispatcherMtx.Unlock()
 	oldD := p.dispatcher
 	endpoint := fmt.Sprintf("%s:%v", c.Host, c.Port)
 	newD := newUDPDispatcher(endpoint)
@@ -202,7 +205,9 @@ func (p *Phosphor) reloadConfig() error {
 		return err
 	}
 
-	// set the config hash as we're finished
+	// set the config hash & swap the dispatcher as we're finished
 	p.updateConfigHash(h)
+	p.dispatcher = newD
+
 	return nil
 }
