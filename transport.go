@@ -59,7 +59,7 @@ func (u *udpTransport) Stop() error {
 
 // connect our transport
 func (u *udpTransport) connect() error {
-	c, err := net.DialTimeout("UDP", u.endpoint, 1*time.Second)
+	c, err := net.DialTimeout("udp", u.endpoint, 1*time.Second)
 	if err != nil {
 		return err
 	}
