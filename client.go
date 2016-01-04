@@ -46,7 +46,7 @@ type Phosphor struct {
 	// configLastHash is the hash of the most recently used configuration
 	// we use this to determine if we need to reinitialise on notification of a
 	// config change
-	configLastHash []byte
+	configLastHash string
 
 	// exitChan is closed when the client is shutting down
 	// TODO refactor to use tomb
@@ -137,13 +137,13 @@ func (p *Phosphor) monitorConfig() {
 	}
 }
 
-func (p *Phosphor) compareConfigHash(h []byte) bool {
+func (p *Phosphor) compareConfigHash(h string) bool {
 	p.configMtx.RLock()
 	defer p.configMtx.RUnlock()
 	return p.configLastHash == h
 }
 
-func (p *Phosphor) updateConfigHash(h []byte) {
+func (p *Phosphor) updateConfigHash(h string) {
 	p.configMtx.Lock()
 	p.configLastHash = h
 	p.configMtx.Unlock()
@@ -157,10 +157,10 @@ func (p *Phosphor) updateConfigHash(h []byte) {
 // If so, update config & reinit
 func (p *Phosphor) reloadConfig() error {
 	c := p.configProvider.Config()
-	h := deephash.Hash(c)
 
 	// Skip reloading if the config is the same
-	if p.compareConfigHash(newHash) {
+	h := fmt.Sprintf("%x", deephash.Hash(c))
+	if p.compareConfigHash(h) {
 		return nil
 	}
 
