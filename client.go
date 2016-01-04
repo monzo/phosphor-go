@@ -97,10 +97,12 @@ func (p *Phosphor) Send(a *phos.Annotation) error {
 		return err
 	}
 
+	c := p.configProvider.Config()
+
 	select {
 	case p.traceChan <- b:
-	case <-time.After(sendTimeout):
-		log.Tracef("Timeout after %v attempting to queue trace annotation: %+v", sendTimeout, a)
+	case <-time.After(c.SendTimeout):
+		log.Tracef("Timeout after %v attempting to queue trace annotation: %+v", c.SendTimeout, a)
 		return ErrTimeout
 	}
 
