@@ -193,8 +193,10 @@ func (p *Phosphor) reloadConfig() error {
 	p.traceChan = newChan
 
 	// gracefully shut down old transport, so just the new one is running
-	if err := oldTr.Stop(); err != nil {
-		return err
+	if oldTr != nil {
+		if err := oldTr.Stop(); err != nil {
+			return err
+		}
 	}
 
 	// set the config hash & swap the transport as we're finished
